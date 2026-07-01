@@ -1,0 +1,6 @@
+{
+  "name": "Oistarsian Master Security",
+  "description": "Heimdal-inspired cybersecurity platform featuring real-time threat detection, automated responses, network health monitoring, and intelligent risk assessment.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
