@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,6 +63,7 @@ fun SecurityDashboard(
 
     val incidents by viewModel.incidents.collectAsStateWithLifecycle()
     val auditedApps by viewModel.auditedApps.collectAsStateWithLifecycle()
+    val networkThreatLevel by viewModel.networkThreatLevel.collectAsStateWithLifecycle()
 
     // Trigger initial app audit
     LaunchedEffect(Unit) {
@@ -74,17 +76,12 @@ fun SecurityDashboard(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // --- Tactical Top Header Visual ---
-            HeaderVisualSection(
-                isScanning = isScanning,
-                detectedCount = detectedCount,
-                incidentsCount = incidents.size
-            )
-
-            // --- Navigation Tabs ---
-            TabNavigationRow(
+            // --- Unified Global Navigation & Status Component ---
+            GlobalNavigationComponent(
                 activeTab = activeTab,
-                onTabSelected = { activeTab = it }
+                onTabSelected = { activeTab = it },
+                threatLevel = networkThreatLevel,
+                isScanning = isScanning
             )
 
             // --- Primary Content Space ---
@@ -131,6 +128,7 @@ fun HeaderVisualSection(
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
+            .clip(RoundedCornerShape(16.dp))
     ) {
         // Hero Background
         Image(
@@ -282,6 +280,144 @@ fun TabNavigationRow(
     }
 }
 
+@Composable
+fun GlobalNavigationComponent(
+    activeTab: String,
+    onTabSelected: (String) -> Unit,
+    threatLevel: NetworkThreatLevel,
+    isScanning: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        tonalElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surface,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column {
+            // App Bar Title and Threat Level Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = "OISTARSIAN SECURITY",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+
+                ThreatLevelBadge(threatLevel = threatLevel, isScanning = isScanning)
+            }
+
+            // Divider line
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            )
+
+            // Tabs Row
+            TabNavigationRow(
+                activeTab = activeTab,
+                onTabSelected = onTabSelected
+            )
+        }
+    }
+}
+
+@Composable
+fun ThreatLevelBadge(
+    threatLevel: NetworkThreatLevel,
+    isScanning: Boolean
+) {
+    val bgColor = when {
+        isScanning -> Color(0xFF2979FF) // Tactical Blue
+        threatLevel == NetworkThreatLevel.SECURE -> Color(0xFF2E7D32) // Emerald Green
+        threatLevel == NetworkThreatLevel.CAUTION -> Color(0xFFEF6C00) // Pumpkin Amber Orange
+        else -> Color(0xFFC62828) // Crimson Red
+    }
+    
+    val textColor = Color.White
+    
+    val label = when {
+        isScanning -> "SCANNING"
+        threatLevel == NetworkThreatLevel.SECURE -> "SECURE"
+        threatLevel == NetworkThreatLevel.CAUTION -> "CAUTION"
+        else -> "CRITICAL"
+    }
+
+    val icon = when {
+        isScanning -> Icons.Default.Refresh
+        threatLevel == NetworkThreatLevel.SECURE -> Icons.Default.CheckCircle
+        threatLevel == NetworkThreatLevel.CAUTION -> Icons.Default.Warning
+        else -> Icons.Default.Warning
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by if (threatLevel == NetworkThreatLevel.CRITICAL || isScanning) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.95f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .testTag("threat_level_badge")
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = textColor,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = textColor,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+    }
+}
+
 // --- Dashboard Tab Content ---
 
 @Composable
@@ -301,6 +437,15 @@ fun DashboardTabContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Tactical Top Header Visual
+        item {
+            HeaderVisualSection(
+                isScanning = isScanning,
+                detectedCount = detectedCount,
+                incidentsCount = incidents.size
+            )
+        }
+
         // Main Scanning Control Console Card
         item {
             Card(

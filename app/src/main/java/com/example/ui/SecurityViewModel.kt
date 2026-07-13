@@ -33,6 +33,12 @@ data class AppAuditInfo(
     val status: String // "Critical", "Warning", "Monitor"
 )
 
+enum class NetworkThreatLevel {
+    SECURE,
+    CAUTION,
+    CRITICAL
+}
+
 class SecurityViewModel(private val repository: SecurityRepository) : ViewModel() {
 
     // --- Shield States ---
@@ -70,6 +76,16 @@ class SecurityViewModel(private val repository: SecurityRepository) : ViewModel(
     // --- Threat Incidents & App Audits ---
     val incidents: StateFlow<List<SecurityIncident>> = repository.allIncidents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val networkThreatLevel: StateFlow<NetworkThreatLevel> = repository.allIncidents
+        .map { list ->
+            when {
+                list.any { it.threatLevel == "CRITICAL" || it.threatLevel == "HIGH" } -> NetworkThreatLevel.CRITICAL
+                list.any { it.threatLevel == "MEDIUM" } -> NetworkThreatLevel.CAUTION
+                else -> NetworkThreatLevel.SECURE
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NetworkThreatLevel.SECURE)
 
     private val _auditedApps = MutableStateFlow<List<AppAuditInfo>>(emptyList())
     val auditedApps = _auditedApps.asStateFlow()
